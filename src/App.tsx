@@ -26,6 +26,7 @@ import { Register } from "./pages/register";
 import DepartmentsList from "./pages/departments/list";
 import DepartmentShow from "./pages/departments/show";
 import FacultyList from "./pages/faculty/list";
+import FacultyShow from "./pages/faculty/show";
 
 import {dataProvider} from "@/providers/data.ts";
 
@@ -70,6 +71,7 @@ function App() {
                   {
                       name: "users",
                       list: "/faculty",
+                      show: "/faculty/show/:id",
                       meta: {
                           label: "Faculty",
                           icon: <Users />,
@@ -117,6 +119,7 @@ function App() {
 
                       <Route path="faculty">
                           <Route index element={<FacultyList />} />
+                          <Route path="show/:id" element={<FacultyShow />} />
                       </Route>
 
                       <Route path="classes">
