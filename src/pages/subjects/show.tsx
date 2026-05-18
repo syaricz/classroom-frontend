@@ -1,44 +1,236 @@
 import { useLink, useShow } from "@refinedev/core";
+import { useTable } from "@refinedev/react-table";
+import { ColumnDef } from "@tanstack/react-table";
+import { useMemo } from "react";
+import { useParams } from "react-router";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable } from "@/components/refine-ui/data-table/data-table";
+import { ShowButton } from "@/components/refine-ui/buttons/show";
 import {
     ShowView,
     ShowViewHeader,
 } from "@/components/refine-ui/views/show-view";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import type { ClassDetails, Department, Subject, User } from "@/types";
+import type { Department, Subject } from "@/types";
 
 type SubjectDetails = {
     subject: Subject & {
         department?: Department | null;
     };
-    classes: Array<
-        ClassDetails & {
-        teacher?: Pick<User, "id" | "name" | "email" | "image">;
-    }
-    >;
     totals: {
         classes: number;
     };
 };
 
+type SubjectClass = {
+    id: number;
+    name: string;
+    status?: string | null;
+    capacity?: number | null;
+    teacher?: {
+        id: string;
+        name: string;
+        email?: string | null;
+        image?: string | null;
+    } | null;
+};
+
+type SubjectUser = {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    image?: string | null;
+};
+
 const SubjectsShow = () => {
     const Link = useLink();
+    const { id } = useParams();
+    const subjectId = id ?? "";
 
     const { query } = useShow<SubjectDetails>({
         resource: "subjects",
     });
 
     const details = query.data?.data;
+
+    const classColumns = useMemo<ColumnDef<SubjectClass>[]>(
+        () => [
+            {
+                id: "name",
+                accessorKey: "name",
+                size: 240,
+                header: () => <p className="column-title">Class</p>,
+                cell: ({ getValue }) => (
+                    <span className="text-foreground">{getValue<string>()}</span>
+                ),
+            },
+            {
+                id: "teacher",
+                accessorKey: "teacher",
+                size: 220,
+                header: () => <p className="column-title">Teacher</p>,
+                cell: ({ row }) => {
+                    const teacher = row.original.teacher;
+                    if (!teacher) {
+                        return <span className="text-muted-foreground">Unassigned</span>;
+                    }
+
+                    return (
+                        <div className="flex items-center gap-2">
+                            <Avatar className="size-7">
+                                {teacher.image && (
+                                    <AvatarImage src={teacher.image} alt={teacher.name} />
+                                )}
+                                <AvatarFallback>{getInitials(teacher.name)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col truncate">
+                                <span className="truncate">{teacher.name}</span>
+                                <span className="text-xs text-muted-foreground truncate">
+                  {teacher.email}
+                </span>
+                            </div>
+                        </div>
+                    );
+                },
+            },
+            {
+                id: "status",
+                accessorKey: "status",
+                size: 120,
+                header: () => <p className="column-title">Status</p>,
+                cell: ({ getValue }) => {
+                    const status = getValue<string>();
+                    return (
+                        <Badge variant={status === "active" ? "default" : "secondary"}>
+                            {status ?? "unknown"}
+                        </Badge>
+                    );
+                },
+            },
+            {
+                id: "details",
+                size: 140,
+                header: () => <p className="column-title">Details</p>,
+                cell: ({ row }) => (
+                    <ShowButton
+                        resource="classes"
+                        recordItemId={row.original.id}
+                        variant="outline"
+                        size="sm"
+                    >
+                        View
+                    </ShowButton>
+                ),
+            },
+        ],
+        []
+    );
+
+    const userColumns = useMemo<ColumnDef<SubjectUser>[]>(
+        () => [
+            {
+                id: "name",
+                accessorKey: "name",
+                size: 240,
+                header: () => <p className="column-title">User</p>,
+                cell: ({ row }) => (
+                    <div className="flex items-center gap-2">
+                        <Avatar className="size-7">
+                            {row.original.image && (
+                                <AvatarImage src={row.original.image} alt={row.original.name} />
+                            )}
+                            <AvatarFallback>{getInitials(row.original.name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col truncate">
+                            <span className="truncate">{row.original.name}</span>
+                            <span className="text-xs text-muted-foreground truncate">
+                {row.original.email}
+              </span>
+                        </div>
+                    </div>
+                ),
+            },
+            {
+                id: "role",
+                accessorKey: "role",
+                size: 140,
+                header: () => <p className="column-title">Role</p>,
+                cell: ({ getValue }) => (
+                    <Badge variant="secondary">{getValue<string>()}</Badge>
+                ),
+            },
+            {
+                id: "details",
+                size: 140,
+                header: () => <p className="column-title">Details</p>,
+                cell: ({ row }) => (
+                    <ShowButton
+                        resource="users"
+                        recordItemId={row.original.id}
+                        variant="outline"
+                        size="sm"
+                    >
+                        View
+                    </ShowButton>
+                ),
+            },
+        ],
+        []
+    );
+
+    const classesTable = useTable<SubjectClass>({
+        columns: classColumns,
+        refineCoreProps: {
+            resource: `subjects/${subjectId}/classes`,
+            pagination: {
+                pageSize: 10,
+                mode: "server",
+            },
+        },
+    });
+
+    const teachersTable = useTable<SubjectUser>({
+        columns: userColumns,
+        refineCoreProps: {
+            resource: `subjects/${subjectId}/users`,
+            pagination: {
+                pageSize: 10,
+                mode: "server",
+            },
+            filters: {
+                permanent: [
+                    {
+                        field: "role",
+                        operator: "eq",
+                        value: "teacher",
+                    },
+                ],
+            },
+        },
+    });
+
+    const studentsTable = useTable<SubjectUser>({
+        columns: userColumns,
+        refineCoreProps: {
+            resource: `subjects/${subjectId}/users`,
+            pagination: {
+                pageSize: 10,
+                mode: "server",
+            },
+            filters: {
+                permanent: [
+                    {
+                        field: "role",
+                        operator: "eq",
+                        value: "student",
+                    },
+                ],
+            },
+        },
+    });
 
     if (query.isLoading || query.isError || !details) {
         return (
@@ -73,73 +265,60 @@ const SubjectsShow = () => {
             </Card>
 
             <Card className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                    <CardTitle>Department</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                    {details.subject.department ? (
+                        <>
+                            <Link
+                                to={`/departments/show/${details.subject.department.id}`}
+                                className="text-lg font-semibold text-foreground hover:underline"
+                            >
+                                {details.subject.department.name}
+                            </Link>
+                            <p className="text-sm text-muted-foreground">
+                                {details.subject.department.description ??
+                                    "No department description provided."}
+                            </p>
+                        </>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">
+                            Department not assigned.
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-md transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Classes</CardTitle>
                     <Badge variant="secondary">{details.totals.classes}</Badge>
                 </CardHeader>
-
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Teacher</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Capacity</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {details.classes.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="text-muted-foreground">
-                                        No classes available.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                            {details.classes.map((item) => (
-                                <TableRow key={item.id}>
-                                    <TableCell>
-                                        <Link to={`/classes/show/${item.id}`}>{item.name}</Link>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="size-7">
-                                                {item.teacher?.image && (
-                                                    <AvatarImage
-                                                        src={item.teacher.image}
-                                                        alt={item.teacher.name}
-                                                    />
-                                                )}
-                                                <AvatarFallback>
-                                                    {getInitials(item.teacher?.name ?? "")}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <p className="text-sm font-medium">
-                                                    {item.teacher?.name ?? "Unassigned"}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {item.teacher?.email ?? "No email"}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant={
-                                                item.status === "active" ? "default" : "secondary"
-                                            }
-                                        >
-                                            {item.status ?? "unknown"}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>{item.capacity ?? "—"}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <DataTable table={classesTable} paginationVariant="simple" />
                 </CardContent>
             </Card>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle>Teachers</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <DataTable table={teachersTable} paginationVariant="simple" />
+                    </CardContent>
+                </Card>
+
+                <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle>Students</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <DataTable table={studentsTable} paginationVariant="simple" />
+                    </CardContent>
+                </Card>
+            </div>
         </ShowView>
     );
 };
